@@ -1,0 +1,4 @@
+name: ValourLink
+version: 1.0
+main: gg.valour.minecraft.ValourLink
+api-version: '1.20'
