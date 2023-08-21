@@ -6,6 +6,7 @@ import com.microsoft.signalr.HubConnection;
 import com.microsoft.signalr.HubConnectionBuilder;
 import gg.valour.minecraft.listeners.ChatListener;
 import gg.valour.minecraft.models.*;
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -22,10 +23,11 @@ import java.util.concurrent.Future;
 
 public class ValourLink extends JavaPlugin implements Listener {
 
+    public static ValourEconomy Economy = null;
     private HttpClient _http;
     private HubConnection _signalR;
     private FileConfiguration _config;
-    private Gson _gson = new GsonBuilder().create();
+    private final Gson _gson = new GsonBuilder().create();
     private final String _baseUrl = "https://app.valour.gg/api/";
     private final String _hubUrl = "https://app.valour.gg/hubs/core";
 
@@ -35,6 +37,7 @@ public class ValourLink extends JavaPlugin implements Listener {
 
     // Authorization token for Valour, critical
     public AuthToken ValourAuth;
+    public Currency ValourCurrency;
     public long PlanetId;
     public long ChannelId;
     public long MemberId;
@@ -73,6 +76,9 @@ public class ValourLink extends JavaPlugin implements Listener {
         }
 
         getServer().getPluginManager().registerEvents(new ChatListener(this), this);
+
+        LogToConsole("Connecting Economy...");
+        SetupEconomy();
     }
     @Override
     public void onDisable() {
@@ -93,6 +99,38 @@ public class ValourLink extends JavaPlugin implements Listener {
         MemberId = _config.getLong("memberId");
 
         saveConfig();
+    }
+
+    private void SetupEconomy() {
+        Economy = new ValourEconomy(this);
+        LogToConsole("Getting planet currency...");
+        LoadCurrency();
+    }
+
+    private void LoadCurrency() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(new URI(_baseUrl + "eco/currencies/byPlanet/" + PlanetId))
+                    .headers(_baseHeaders)
+                    .header("content-type", "application/json")
+                    .GET()
+                    .build();
+
+            var result = _http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (result.statusCode() != 200) {
+                LogToConsole("Error getting planet currency!");
+                LogToConsole("Economy features will be broken!");
+                return;
+            }
+
+            ValourCurrency = _gson.fromJson(result.body(), Currency.class);
+            LogToConsole("Loaded currency " + ValourCurrency.name + "successfully!");
+
+        } catch (Exception ex) {
+            LogToConsole("Error getting planet currency!");
+            LogToConsole("Economy features will be broken!");
+            LogToConsole(ex.getMessage());
+        }
     }
 
     public Future<TaskResult> SendValourMessage(PlanetMessage message) {
