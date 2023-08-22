@@ -1,16 +1,17 @@
 package gg.valour.minecraft;
 
+import net.milkbowl.vault.economy.AbstractEconomy;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.OfflinePlayer;
 
 import java.util.List;
 
-public class ValourEconomy implements Economy {
+public class ValourEconomy extends AbstractEconomy {
     private ValourLink _valourLink;
 
-    public ValourEconomy(ValourLink link) {
-        _valourLink = link;
+    public ValourEconomy() {
+        _valourLink = ValourLink.Instance;
     }
 
     @Override

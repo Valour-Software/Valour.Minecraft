@@ -10,7 +10,7 @@ import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.event.Listener;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.net.URI;
@@ -18,12 +18,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.HashMap;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
-public class ValourLink extends JavaPlugin implements Listener {
+public class ValourLink extends JavaPlugin {
 
-    public static ValourEconomy Economy = null;
+    public static ValourLink Instance;
+    public static ValourEconomy Economy;
     private HttpClient _http;
     private HubConnection _signalR;
     private FileConfiguration _config;
@@ -42,14 +44,22 @@ public class ValourLink extends JavaPlugin implements Listener {
     public long ChannelId;
     public long MemberId;
 
-    private HashMap<String, User> _userMap = new HashMap<String, User>();
+    public HashMap<String, Long> UUIDToValourMap = new HashMap<String, Long>();
+
+    public HashMap<String, User> UserIdMap = new HashMap<String, User>();
+
+    private HashMap<String, String> _codeToUUID = new HashMap<String, String>();
+
+    public void AddLinkCode(String code, String playerUUID) {
+        _codeToUUID.put(code, playerUUID);
+    }
 
     private User GetCachedUser(long userId) {
-        return _userMap.getOrDefault(String.valueOf(userId), null);
+        return UserIdMap.getOrDefault(String.valueOf(userId), null);
     }
 
     private void SetCachedUser(User user){
-        _userMap.put(String.valueOf(user.id), user);
+        UserIdMap.put(String.valueOf(user.id), user);
     }
 
     public void LogToConsole(String message){
@@ -57,12 +67,23 @@ public class ValourLink extends JavaPlugin implements Listener {
     }
 
     @Override
+    public void onLoad() {
+        LogToConsole("ValourLink has been loaded.");
+    }
+
+    @Override
     public void onEnable() {
-        LogToConsole("ValourLink has been enabled.");
+        Instance = this;
+
         LogToConsole("Setting up config.");
         SetupConfig();
         LogToConsole("Attempting to get token...");
         SetupHttp();
+
+        LogToConsole("Connecting Economy...");
+        SetupEconomy();
+
+        LogToConsole("ValourLink has been enabled.");
         LogToConsole("Connecting to SignalR...");
         SetupSignalR();
 
@@ -77,12 +98,16 @@ public class ValourLink extends JavaPlugin implements Listener {
 
         getServer().getPluginManager().registerEvents(new ChatListener(this), this);
 
-        LogToConsole("Connecting Economy...");
-        SetupEconomy();
+        SetupCommands();
     }
+
     @Override
     public void onDisable() {
         LogToConsole("ValourLink has been disabled.");
+    }
+
+    private void SetupCommands() {
+        this.getCommand("valourlink").setExecutor(new ValourLink());
     }
 
     private void SetupConfig(){
@@ -102,7 +127,7 @@ public class ValourLink extends JavaPlugin implements Listener {
     }
 
     private void SetupEconomy() {
-        Economy = new ValourEconomy(this);
+        getServer().getServicesManager().register(Economy.class, Economy = new ValourEconomy(), this, ServicePriority.Highest);
         LogToConsole("Getting planet currency...");
         LoadCurrency();
     }
@@ -124,7 +149,7 @@ public class ValourLink extends JavaPlugin implements Listener {
             }
 
             ValourCurrency = _gson.fromJson(result.body(), Currency.class);
-            LogToConsole("Loaded currency " + ValourCurrency.name + "successfully!");
+            LogToConsole("Loaded currency " + ValourCurrency.name + " successfully!");
 
         } catch (Exception ex) {
             LogToConsole("Error getting planet currency!");
@@ -133,7 +158,16 @@ public class ValourLink extends JavaPlugin implements Listener {
         }
     }
 
-    public Future<TaskResult> SendValourMessage(PlanetMessage message) {
+    public Future<TaskResult> SendValourMessage(String content) {
+
+        PlanetMessage message = new PlanetMessage();
+        message.planetId = PlanetId;
+        message.channelId = ChannelId;
+        message.authorUserId = ValourAuth.userId;
+        message.authorMemberId = MemberId;
+        message.fingerprint = UUID.randomUUID().toString();
+        message.content = content;
+
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(new URI(_baseUrl + "chatchannels/" + message.channelId + "/messages"))
@@ -289,6 +323,26 @@ public class ValourLink extends JavaPlugin implements Listener {
         try {
             if (message.authorUserId == ValourAuth.userId) {
                 return;
+            }
+
+            if (message.content.startsWith("/mclink")) {
+                var split = message.content.split(" ");
+                if (split.length < 2) {
+                    SendValourMessage("[ValourLink] Failed! Include your code!");
+                    return;
+                }
+
+                var uuid = _codeToUUID.getOrDefault(split[1], "FAIL");
+                if (uuid.equals("FAIL")) {
+                    SendValourMessage("[ValourLink] Failed! Code not found!");
+                    return;
+                }
+
+                UUIDToValourMap.put(uuid, message.authorUserId);
+
+                GetUserAsync(message.authorUserId);
+
+                SendValourMessage("[ValourLink] Linked to MC user " + uuid);
             }
 
             var user = GetUserAsync(message.authorUserId).get();

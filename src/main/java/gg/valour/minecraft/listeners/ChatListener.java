@@ -18,15 +18,7 @@ public class ChatListener implements Listener {
 
     @EventHandler
     public void OnMinecraftChat(AsyncPlayerChatEvent event) {
-        PlanetMessage message = new PlanetMessage();
-        message.planetId = _valourLink.PlanetId;
-        message.channelId = _valourLink.ChannelId;
-        message.authorUserId = _valourLink.ValourAuth.userId;
-        message.authorMemberId = _valourLink.MemberId;
-
-        message.fingerprint = UUID.randomUUID().toString();
-
-        message.content = "(MC)[" + event.getPlayer().getPlayerListName() + "]: " + event.getMessage();
+        var message = "(MC)[" + event.getPlayer().getPlayerListName() + "]: " + event.getMessage();
 
         try {
             var task = _valourLink.SendValourMessage(message);
