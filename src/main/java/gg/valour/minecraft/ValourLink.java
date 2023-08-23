@@ -4,15 +4,22 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.microsoft.signalr.HubConnection;
 import com.microsoft.signalr.HubConnectionBuilder;
+import gg.valour.minecraft.commands.CommandBalance;
+import gg.valour.minecraft.commands.CommandLink;
+import gg.valour.minecraft.commands.CommandPay;
+import gg.valour.minecraft.commands.CommandValourId;
 import gg.valour.minecraft.listeners.ChatListener;
 import gg.valour.minecraft.models.*;
-import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.util.io.BukkitObjectInputStream;
+import org.bukkit.util.io.BukkitObjectOutputStream;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -25,25 +32,26 @@ import java.util.concurrent.Future;
 public class ValourLink extends JavaPlugin {
 
     public static ValourLink Instance;
-    public static ValourEconomy Economy;
-    private HttpClient _http;
+    public ValourEconomy Economy;
+    public HttpClient Http;
     private HubConnection _signalR;
     private FileConfiguration _config;
-    private final Gson _gson = new GsonBuilder().create();
-    private final String _baseUrl = "https://app.valour.gg/api/";
+    public final Gson Gson = new GsonBuilder().create();
+    public final String BaseUrl = "https://app.valour.gg/api/";
     private final String _hubUrl = "https://app.valour.gg/hubs/core";
 
     private String _primaryNode;
 
-    private String[] _baseHeaders;
+    public String[] BaseHeaders;
 
     // Authorization token for Valour, critical
     public AuthToken ValourAuth;
-    public Currency ValourCurrency;
     public long PlanetId;
     public long ChannelId;
     public long MemberId;
+    public long HoldingAccountId;
 
+    public HashMap<String, Double> LocalEcoAccounts = new HashMap<String, Double>();
     public HashMap<String, Long> UUIDToValourMap = new HashMap<String, Long>();
 
     public HashMap<String, User> UserIdMap = new HashMap<String, User>();
@@ -69,6 +77,7 @@ public class ValourLink extends JavaPlugin {
     @Override
     public void onLoad() {
         LogToConsole("ValourLink has been loaded.");
+        LoadValourMapping();
     }
 
     @Override
@@ -80,8 +89,8 @@ public class ValourLink extends JavaPlugin {
         LogToConsole("Attempting to get token...");
         SetupHttp();
 
-        LogToConsole("Connecting Economy...");
-        SetupEconomy();
+        LogToConsole("Linking Economy...");
+        Economy = new ValourEconomy(this);
 
         LogToConsole("ValourLink has been enabled.");
         LogToConsole("Connecting to SignalR...");
@@ -107,7 +116,10 @@ public class ValourLink extends JavaPlugin {
     }
 
     private void SetupCommands() {
-        this.getCommand("valourlink").setExecutor(new ValourLink());
+        this.getCommand("valourlink").setExecutor(new CommandLink());
+        this.getCommand("valourid").setExecutor(new CommandValourId());
+        this.getCommand("balance").setExecutor(new CommandBalance());
+        this.getCommand("pay").setExecutor(new CommandPay());
     }
 
     private void SetupConfig(){
@@ -117,46 +129,18 @@ public class ValourLink extends JavaPlugin {
         _config.addDefault("channelId", 0);
         _config.addDefault("planetId", 0);
         _config.addDefault("memberId", 0);
+        _config.addDefault("ecoHoldingId", 0);
         _config.options().copyDefaults(true);
 
         ChannelId = _config.getLong("channelId");
         PlanetId = _config.getLong("planetId");
         MemberId = _config.getLong("memberId");
+        HoldingAccountId = _config.getLong("ecoHoldingId");
 
         saveConfig();
     }
 
-    private void SetupEconomy() {
-        getServer().getServicesManager().register(Economy.class, Economy = new ValourEconomy(), this, ServicePriority.Highest);
-        LogToConsole("Getting planet currency...");
-        LoadCurrency();
-    }
 
-    private void LoadCurrency() {
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(new URI(_baseUrl + "eco/currencies/byPlanet/" + PlanetId))
-                    .headers(_baseHeaders)
-                    .header("content-type", "application/json")
-                    .GET()
-                    .build();
-
-            var result = _http.send(request, HttpResponse.BodyHandlers.ofString());
-            if (result.statusCode() != 200) {
-                LogToConsole("Error getting planet currency!");
-                LogToConsole("Economy features will be broken!");
-                return;
-            }
-
-            ValourCurrency = _gson.fromJson(result.body(), Currency.class);
-            LogToConsole("Loaded currency " + ValourCurrency.name + " successfully!");
-
-        } catch (Exception ex) {
-            LogToConsole("Error getting planet currency!");
-            LogToConsole("Economy features will be broken!");
-            LogToConsole(ex.getMessage());
-        }
-    }
 
     public Future<TaskResult> SendValourMessage(String content) {
 
@@ -170,13 +154,13 @@ public class ValourLink extends JavaPlugin {
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(new URI(_baseUrl + "chatchannels/" + message.channelId + "/messages"))
-                    .headers(_baseHeaders)
+                    .uri(new URI(BaseUrl + "chatchannels/" + message.channelId + "/messages"))
+                    .headers(BaseHeaders)
                     .header("content-type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(_gson.toJson(message)))
+                    .POST(HttpRequest.BodyPublishers.ofString(Gson.toJson(message)))
                     .build();
 
-            return _http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+            return Http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenApply((result) -> {
                         var res = new TaskResult();
                         res.Message = result.body();
@@ -207,14 +191,14 @@ public class ValourLink extends JavaPlugin {
 
         try {
             HttpRequest authRequest = HttpRequest.newBuilder()
-                    .uri(new URI(_baseUrl + "users/" + userId))
-                    .headers(_baseHeaders)
+                    .uri(new URI(BaseUrl + "users/" + userId))
+                    .headers(BaseHeaders)
                     .GET()
                     .build();
 
-            return _http.sendAsync(authRequest, HttpResponse.BodyHandlers.ofString())
+            return Http.sendAsync(authRequest, HttpResponse.BodyHandlers.ofString())
                     .thenApply((result) -> {
-                       var user = _gson.fromJson(result.body(), User.class);
+                       var user = Gson.fromJson(result.body(), User.class);
                        SetCachedUser(user);
                        return user;
                     });
@@ -228,7 +212,7 @@ public class ValourLink extends JavaPlugin {
 
     private void SetupHttp(){
         // Setup http client
-        _http = HttpClient.newBuilder().build();
+        Http = HttpClient.newBuilder().build();
 
         var authPayload = new TokenRequest();
         authPayload.email = _config.getString("valourEmail");
@@ -237,9 +221,9 @@ public class ValourLink extends JavaPlugin {
         try {
             // Initial auth request to get token
             HttpRequest authRequest = HttpRequest.newBuilder()
-                    .uri(new URI(_baseUrl + "users/token"))
+                    .uri(new URI(BaseUrl + "users/token"))
                     .header("content-type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(_gson.toJson(authPayload)))
+                    .POST(HttpRequest.BodyPublishers.ofString(Gson.toJson(authPayload)))
                     .build();
 
             /*
@@ -250,24 +234,24 @@ public class ValourLink extends JavaPlugin {
                     });
              */
 
-            var response = _http.send(authRequest, HttpResponse.BodyHandlers.ofString());
+            var response = Http.send(authRequest, HttpResponse.BodyHandlers.ofString());
             LogToConsole("Token response: " + response.statusCode());
             if (response.statusCode() != 200) {
                 LogToConsole("Failed to negotiate Valour token. Check config.");
                 return;
             }
 
-            ValourAuth = _gson.fromJson(response.body(), AuthToken.class);
+            ValourAuth = Gson.fromJson(response.body(), AuthToken.class);
             LogToConsole("Loaded token for user " + ValourAuth.userId);
 
             // Get primary Valour node for future requests
             HttpRequest nodeRequest = HttpRequest.newBuilder()
-                    .uri(new URI(_baseUrl + "node/name"))
+                    .uri(new URI(BaseUrl + "node/name"))
                     .setHeader("authorization", ValourAuth.id)
                     .GET()
                     .build();
 
-            var nodeResponse = _http.send(nodeRequest, HttpResponse.BodyHandlers.ofString());
+            var nodeResponse = Http.send(nodeRequest, HttpResponse.BodyHandlers.ofString());
             if (nodeResponse.statusCode() != 200) {
                 LogToConsole("Failed to get primary node. Falling back on 'emma', but please note this may cause issues.");
                 _primaryNode = "emma";
@@ -278,7 +262,7 @@ public class ValourLink extends JavaPlugin {
             }
 
             // Setup base headers for future requests
-            _baseHeaders = new String[]{
+            BaseHeaders = new String[]{
                 "authorization", ValourAuth.id,
                 "x-server-select", _primaryNode
             };
@@ -299,6 +283,14 @@ public class ValourLink extends JavaPlugin {
                 .withHeader("authorization", ValourAuth.id)
                 .withHeader("x-server-select", _primaryNode)
                 .build();
+
+        _signalR.onClosed((ex) -> {
+            LogToConsole("Valour SignalR connection closed. Reconnecting...");
+            var restartError = _signalR.start().blockingGet();
+            if (restartError != null) {
+                LogToConsole(restartError.getMessage());
+            }
+        });
 
         var startError = _signalR.start().blockingGet();
         if (startError != null) {
@@ -338,11 +330,16 @@ public class ValourLink extends JavaPlugin {
                     return;
                 }
 
+                // Prevent hijacking
+                _codeToUUID.remove(split[1]);
+
                 UUIDToValourMap.put(uuid, message.authorUserId);
 
                 GetUserAsync(message.authorUserId);
 
                 SendValourMessage("[ValourLink] Linked to MC user " + uuid);
+
+                SaveValourMapping();
             }
 
             var user = GetUserAsync(message.authorUserId).get();
@@ -354,6 +351,68 @@ public class ValourLink extends JavaPlugin {
 
         } catch (Exception ex) {
             LogToConsole("Error fetching user " + message.authorUserId);
+            LogToConsole(ex.getMessage());
+        }
+    }
+
+    public void SaveValourMapping() {
+        try {
+            FileOutputStream output = new FileOutputStream("linkData.json");
+            BukkitObjectOutputStream bOut = new BukkitObjectOutputStream(output);
+            bOut.writeObject(UUIDToValourMap);
+            bOut.close();
+            LogToConsole("Saved updated Valour link data.");
+        } catch (Exception ex) {
+            LogToConsole("Critical error saving Valour link data!");
+            LogToConsole(ex.getMessage());
+        }
+    }
+
+    public void LoadValourMapping() {
+        try {
+            if (!new File("linkData.json").exists()) {
+                LogToConsole("No Valour link data found. Skipping load...");
+                return;
+            }
+
+            FileInputStream input = new FileInputStream("linkData.json");
+            BukkitObjectInputStream bIn = new BukkitObjectInputStream(input);
+            UUIDToValourMap = (HashMap<String, Long>) bIn.readObject();
+
+            LogToConsole("Loaded " + UUIDToValourMap.size() + " linked Valour ids.");
+        } catch (Exception ex) {
+            LogToConsole("Critical error loading Valour link data!");
+            LogToConsole(ex.getMessage());
+        }
+    }
+
+    public void SaveLocalAccounts() {
+        try {
+            FileOutputStream output = new FileOutputStream("localAccountData.json");
+            BukkitObjectOutputStream bOut = new BukkitObjectOutputStream(output);
+            bOut.writeObject(LocalEcoAccounts);
+            bOut.close();
+            LogToConsole("Saved updated Valour local eco account data.");
+        } catch (Exception ex) {
+            LogToConsole("Critical error saving Valour local eco account data!");
+            LogToConsole(ex.getMessage());
+        }
+    }
+
+    public void LoadLocalAccounts() {
+        try {
+            if (!new File("localAccountData.json").exists()) {
+                LogToConsole("No Valour local eco account data found. Skipping load...");
+                return;
+            }
+
+            FileInputStream input = new FileInputStream("localAccountData.json");
+            BukkitObjectInputStream bIn = new BukkitObjectInputStream(input);
+            LocalEcoAccounts = (HashMap<String, Double>) bIn.readObject();
+
+            LogToConsole("Loaded " + LocalEcoAccounts.size() + " local eco accounts.");
+        } catch (Exception ex) {
+            LogToConsole("Critical error loading Valour local eco data!");
             LogToConsole(ex.getMessage());
         }
     }

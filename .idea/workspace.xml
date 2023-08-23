@@ -5,12 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8e2c5e42-8b69-4e1f-a110-5d9a4b10049c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/commands/CommandLink.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/uiDesigner.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/ValourVaultHook.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/commands/CommandBalance.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/commands/CommandPay.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/commands/CommandValourId.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/models/EcoAccount.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/models/Transaction.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/ValourEconomy.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/ValourEconomy.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/ValourLink.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/ValourLink.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/listeners/ChatListener.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gg/valour/minecraft/listeners/ChatListener.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -40,29 +44,30 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/kobe/Desktop/Valour.Minecraft&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;onboarding.tips.debug.path&quot;: &quot;C:/Users/SpikeViper/IdeaProjects/Valour.Minecraft/src/main/java/gg/valour/minecraft/Main.java&quot;,
-    &quot;project.structure.last.edited&quot;: &quot;Project&quot;,
-    &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
-    &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;advanced.settings&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_ADD_EXTERNAL_FILES": "true",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "/Users/kobe/Desktop/Valour.Minecraft",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "onboarding.tips.debug.path": "C:/Users/SpikeViper/IdeaProjects/Valour.Minecraft/src/main/java/gg/valour/minecraft/Main.java",
+    "project.structure.last.edited": "Project",
+    "project.structure.proportion": "0.0",
+    "project.structure.side.proportion": "0.0",
+    "settings.editor.selected.configurable": "advanced.settings",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RunManager">
-    <configuration name="Main" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+    <configuration name="ValourLink" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
       <option name="ALTERNATIVE_JRE_PATH" value="$PROJECT_DIR$/../../../../Program Files/Microsoft/jdk-17.0.8.7-hotspot" />
       <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
       <option name="MAIN_CLASS_NAME" value="gg.valour.minecraft.ValourLink" />
@@ -78,7 +83,7 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Application.Main" />
+        <item itemvalue="Application.ValourLink" />
       </list>
     </recent_temporary>
   </component>

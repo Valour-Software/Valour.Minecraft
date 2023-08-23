@@ -1,231 +1,228 @@
 package gg.valour.minecraft;
 
-import net.milkbowl.vault.economy.AbstractEconomy;
+import gg.valour.minecraft.models.Currency;
+import gg.valour.minecraft.models.EcoAccount;
+import gg.valour.minecraft.models.TaskResult;
+import gg.valour.minecraft.models.Transaction;
 import net.milkbowl.vault.economy.Economy;
-import net.milkbowl.vault.economy.EconomyResponse;
-import org.bukkit.OfflinePlayer;
+import org.bukkit.plugin.ServicePriority;
 
-import java.util.List;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
-public class ValourEconomy extends AbstractEconomy {
-    private ValourLink _valourLink;
+public class ValourEconomy {
+    public static ValourEconomy Instance;
+    private  ValourLink Link;
 
-    public ValourEconomy() {
-        _valourLink = ValourLink.Instance;
+    public Currency ValourCurrency;
+
+    // BALANCE DOES NOT UPDATE OR REFLECT REALITY!
+    public EcoAccount HoldingsAccount;
+
+    public ValourEconomy(ValourLink link) {
+        Instance = this;
+        Link = link;
+
+        SetupEconomy();
     }
 
-    @Override
-    public boolean isEnabled() {
-        return true;
+    private void SetupEconomy() {
+        Link.getServer().getServicesManager().register(Economy.class, new ValourVaultHook(this), Link, ServicePriority.Highest);
+        Link.LogToConsole("Getting planet currency...");
+        LoadCurrency();
+
+        try {
+            HoldingsAccount = GetAccountById(Link.HoldingAccountId).get();
+            Link.LogToConsole("Loaded holdings account " + HoldingsAccount.name + " (" + HoldingsAccount.id + ")");
+        } catch (Exception ex) {
+            Link.LogToConsole("Failed to load holdings account. This will break some vault-based eco features!");
+            Link.LogToConsole("Valour is a closed economy, which means there must be an account to handle server transactions.");
+            Link.LogToConsole(ex.getMessage());
+        }
     }
 
-    @Override
-    public String getName() {
-        return "Valour Economy";
+    public CompletableFuture<EcoAccount> GetAccountById(long accountId) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(new URI(Link.BaseUrl + "eco/accounts/" + accountId))
+                    .headers(Link.BaseHeaders)
+                    .header("content-type", "application/json")
+                    .GET()
+                    .build();
+
+            return Link.Http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenApply(response -> {
+                        if (response.statusCode() != 200) {
+                            return null;
+                        }
+                        return Link.Gson.fromJson(response.body(), EcoAccount.class);
+                    });
+
+        } catch (Exception ex) {
+            Link.LogToConsole("Error getting account.");
+            Link.LogToConsole(ex.getMessage());
+            return CompletableFuture.supplyAsync(() -> { return null; });
+        }
     }
 
-    @Override
-    public boolean hasBankSupport() {
-        return false;
+    public CompletableFuture<EcoAccount> GetAccountByUserId(String uuid) {
+
+        var valourId = Link.UUIDToValourMap.getOrDefault(uuid, null);
+        if (valourId == null) {
+            return CompletableFuture.supplyAsync(() -> { return null; });
+        }
+
+        return GetAccountByUserId(valourId);
     }
 
-    @Override
-    public int fractionalDigits() {
-        return _valourLink.ValourCurrency.decimalPlaces;
+    public CompletableFuture<EcoAccount> GetAccountByUserId(long valourId) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(new URI(Link.BaseUrl + "eco/accounts/planet/" + Link.PlanetId + "/byuser/" + valourId))
+                    .headers(Link.BaseHeaders)
+                    .header("content-type", "application/json")
+                    .GET()
+                    .build();
+
+            return Link.Http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenApply(response -> {
+                        if (response.statusCode() != 200) {
+                            return null;
+                        }
+                        return Link.Gson.fromJson(response.body(), EcoAccount.class);
+                    });
+
+        } catch (Exception ex) {
+            Link.LogToConsole("Error getting user account.");
+            Link.LogToConsole(ex.getMessage());
+            return CompletableFuture.supplyAsync(() -> { return null; });
+        }
     }
 
-    @Override
-    public String format(double v) {
-        return _valourLink.ValourCurrency.symbol + v;
+    public CompletableFuture<TaskResult> DoTransaction(String from, long to, double amount) {
+        // Get both user accounts
+        var fromTask = GetAccountByUserId(from);
+        var toTask = GetAccountByUserId(to);
+
+        try {
+            CompletableFuture.allOf(fromTask, toTask).get();
+        } catch (Exception ex) {
+            var res = new TaskResult();
+            res.Message = "Error getting accounts.";
+            return CompletableFuture.supplyAsync(() -> res);
+        }
+
+        var fromAcc = fromTask.join();
+        var toAcc = toTask.join();
+
+        if (fromAcc == null || toAcc == null) {
+            var res = new TaskResult();
+            res.Message = "Error getting accounts.";
+            return CompletableFuture.supplyAsync(() -> res);
+        }
+
+        return DoTransaction(fromAcc, toAcc, amount);
     }
 
-    @Override
-    public String currencyNamePlural() {
-        return _valourLink.ValourCurrency.pluralName;
+    public CompletableFuture<TaskResult> DoTransaction(String from, String to, double amount) {
+        // Get both user accounts
+        var fromTask = GetAccountByUserId(from);
+        var toTask = GetAccountByUserId(to);
+
+        try {
+            CompletableFuture.allOf(fromTask, toTask).get();
+        } catch (Exception ex) {
+            var res = new TaskResult();
+            res.Message = "Error getting accounts.";
+            return CompletableFuture.supplyAsync(() -> res);
+        }
+
+        var fromAcc = fromTask.join();
+        var toAcc = toTask.join();
+
+        if (fromAcc == null || toAcc == null) {
+            var res = new TaskResult();
+            res.Message = "Error getting accounts.";
+            return CompletableFuture.supplyAsync(() -> res);
+        }
+
+        return DoTransaction(fromAcc, toAcc, amount);
     }
 
-    @Override
-    public String currencyNameSingular() {
-        return _valourLink.ValourCurrency.name;
+    public CompletableFuture<TaskResult> DoTransaction(EcoAccount fromAcc, EcoAccount toAcc, double amount) {
+        Transaction transaction = new Transaction();
+
+        transaction.planetId = Link.PlanetId;
+        transaction.userFromId = fromAcc.userId;
+        transaction.accountFromId = fromAcc.id;
+        transaction.userToId = toAcc.userId;
+        transaction.accountToId = toAcc.id;
+
+        transaction.description = "Minecraft ValourLink payment";
+
+        transaction.amount = new BigDecimal(amount).setScale(ValourCurrency.decimalPlaces, RoundingMode.HALF_UP);
+
+        transaction.fingerprint = "MC-" + UUID.randomUUID().toString();
+
+        transaction.forcedBy = Link.ValourAuth.userId;
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(new URI(Link.BaseUrl + "eco/transactions"))
+                    .headers(Link.BaseHeaders)
+                    .header("content-type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(Link.Gson.toJson(transaction)))
+                    .build();
+
+            return Link.Http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenApply(response -> {
+                        var result = new TaskResult();
+                        result.Message = response.body();
+                        if (response.statusCode() == 201) {
+                            result.Success = true;
+                        }
+                        return result;
+                    });
+
+        } catch (Exception ex) {
+            Link.LogToConsole("Error sending transaction.");
+            Link.LogToConsole(ex.getMessage());
+            TaskResult res = new TaskResult();
+            res.Message = "Error sending transaction.";
+            return CompletableFuture.supplyAsync(() -> res);
+        }
     }
 
-    @Override
-    public boolean hasAccount(String s) {
-        return false;
+    private void LoadCurrency() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(new URI(Link.BaseUrl + "eco/currencies/byPlanet/" + Link.PlanetId))
+                    .headers(Link.BaseHeaders)
+                    .header("content-type", "application/json")
+                    .GET()
+                    .build();
+
+            var result = Link.Http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (result.statusCode() != 200) {
+                Link.LogToConsole("Error getting planet currency!");
+                Link.LogToConsole("Economy features will be broken!");
+                return;
+            }
+
+            ValourCurrency = Link.Gson.fromJson(result.body(), Currency.class);
+            Link.LogToConsole("Loaded currency " + ValourCurrency.name + " successfully!");
+
+        } catch (Exception ex) {
+            Link.LogToConsole("Error getting planet currency!");
+            Link.LogToConsole("Economy features will be broken!");
+            Link.LogToConsole(ex.getMessage());
+        }
     }
 
-    @Override
-    public boolean hasAccount(OfflinePlayer offlinePlayer) {
-        return false;
-    }
 
-    @Override
-    public boolean hasAccount(String s, String s1) {
-        return false;
-    }
-
-    @Override
-    public boolean hasAccount(OfflinePlayer offlinePlayer, String s) {
-        return false;
-    }
-
-    @Override
-    public double getBalance(String s) {
-        return 0;
-    }
-
-    @Override
-    public double getBalance(OfflinePlayer offlinePlayer) {
-        return 0;
-    }
-
-    @Override
-    public double getBalance(String s, String s1) {
-        return 0;
-    }
-
-    @Override
-    public double getBalance(OfflinePlayer offlinePlayer, String s) {
-        return 0;
-    }
-
-    @Override
-    public boolean has(String s, double v) {
-        return false;
-    }
-
-    @Override
-    public boolean has(OfflinePlayer offlinePlayer, double v) {
-        return false;
-    }
-
-    @Override
-    public boolean has(String s, String s1, double v) {
-        return false;
-    }
-
-    @Override
-    public boolean has(OfflinePlayer offlinePlayer, String s, double v) {
-        return false;
-    }
-
-    @Override
-    public EconomyResponse withdrawPlayer(String s, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse withdrawPlayer(OfflinePlayer offlinePlayer, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse withdrawPlayer(String s, String s1, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse withdrawPlayer(OfflinePlayer offlinePlayer, String s, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse depositPlayer(String s, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse depositPlayer(OfflinePlayer offlinePlayer, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse depositPlayer(String s, String s1, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse depositPlayer(OfflinePlayer offlinePlayer, String s, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse createBank(String s, String s1) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse createBank(String s, OfflinePlayer offlinePlayer) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse deleteBank(String s) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse bankBalance(String s) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse bankHas(String s, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse bankWithdraw(String s, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse bankDeposit(String s, double v) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse isBankOwner(String s, String s1) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse isBankOwner(String s, OfflinePlayer offlinePlayer) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse isBankMember(String s, String s1) {
-        return null;
-    }
-
-    @Override
-    public EconomyResponse isBankMember(String s, OfflinePlayer offlinePlayer) {
-        return null;
-    }
-
-    @Override
-    public List<String> getBanks() {
-        return null;
-    }
-
-    @Override
-    public boolean createPlayerAccount(String s) {
-        return false;
-    }
-
-    @Override
-    public boolean createPlayerAccount(OfflinePlayer offlinePlayer) {
-        return false;
-    }
-
-    @Override
-    public boolean createPlayerAccount(String s, String s1) {
-        return false;
-    }
-
-    @Override
-    public boolean createPlayerAccount(OfflinePlayer offlinePlayer, String s) {
-        return false;
-    }
 }

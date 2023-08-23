@@ -9,3 +9,17 @@ commands:
     description: Starts the Valour link process
     usage: /<command>
     permission: valour.link
+  valourid:
+    description: Provides your Valour id, if linked
+    usage: /<command>
+    permission: valour.id
+  balance:
+    description: Provides your Valour balance
+    usage: /<command>
+    permission: valour.balance
+    aliases: bal, vbal
+  pay:
+    description: Sends an amount from your balance to the given player
+    usage: /<command> <player> <amount>
+    permission: valour.pay
+    aliases: vpay
