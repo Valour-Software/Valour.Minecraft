@@ -78,6 +78,7 @@ public class ValourLink extends JavaPlugin {
     public void onLoad() {
         LogToConsole("ValourLink has been loaded.");
         LoadValourMapping();
+        LoadLocalAccounts();
     }
 
     @Override

@@ -105,6 +105,11 @@ public class ValourVaultHook extends AbstractEconomy {
     @Override
     public double getBalance(String s) {
         try {
+            // Towny support
+            if (s.startsWith("town-") || s.startsWith("nation-")) {
+                return _valourLink.LocalEcoAccounts.getOrDefault(s, 0d);
+            }
+
             var player = Bukkit.getOfflinePlayer(s);
             var account = _economy.GetAccountByUserId(player.getUniqueId().toString()).get();
             if (account == null) {
@@ -136,6 +141,11 @@ public class ValourVaultHook extends AbstractEconomy {
     @Override
     public double getBalance(String s, String s1) {
         try {
+            // Towny support
+            if (s.startsWith("town-") || s.startsWith("nation-")) {
+                return _valourLink.LocalEcoAccounts.getOrDefault(s, 0d);
+            }
+
             var player = Bukkit.getOfflinePlayer(s);
             var account = _economy.GetAccountByUserId(player.getUniqueId().toString()).get();
 
@@ -168,6 +178,12 @@ public class ValourVaultHook extends AbstractEconomy {
     @Override
     public boolean has(String s, double v) {
         try {
+            // Towny support
+            if (s.startsWith("town-") || s.startsWith("nation-")) {
+                var balance = _valourLink.LocalEcoAccounts.getOrDefault(s, 0d);
+                return balance >= v;
+            }
+
             var player = Bukkit.getOfflinePlayer(s);
             var account = _economy.GetAccountByUserId(player.getUniqueId().toString()).get();
             if (account == null) {
@@ -199,6 +215,12 @@ public class ValourVaultHook extends AbstractEconomy {
     @Override
     public boolean has(String s, String s1, double v) {
         try {
+            // Towny support
+            if (s.startsWith("town-") || s.startsWith("nation-")) {
+                var balance = _valourLink.LocalEcoAccounts.getOrDefault(s, 0d);
+                return balance >= v;
+            }
+
             var player = Bukkit.getOfflinePlayer(s);
             var account = _economy.GetAccountByUserId(player.getUniqueId().toString()).get();
             if (account == null) {
@@ -227,17 +249,19 @@ public class ValourVaultHook extends AbstractEconomy {
         }
     }
 
-    private EconomyResponse DoWithraw(EcoAccount acc, double v) {
+    private EconomyResponse DoWithdraw(EcoAccount acc, double v) {
         try {
             if (acc == null) {
                 return new EconomyResponse(0, 0, EconomyResponse.ResponseType.FAILURE, "Account not found");
             }
 
             var result = ValourEconomy.Instance.DoTransaction(acc, _economy.HoldingsAccount, v).get();
+
             if (!result.Success) {
+                _valourLink.LogToConsole("Failed transaction: " + result.Message);
                 return new EconomyResponse(0, acc.balanceValue.doubleValue(), EconomyResponse.ResponseType.FAILURE, result.Message);
             } else {
-                return new EconomyResponse(-v, acc.balanceValue.doubleValue() - v, EconomyResponse.ResponseType.SUCCESS, result.Message);
+                return new EconomyResponse(v, acc.balanceValue.doubleValue() - v, EconomyResponse.ResponseType.SUCCESS, null);
             }
 
         } catch (Exception ex) {
@@ -250,9 +274,30 @@ public class ValourVaultHook extends AbstractEconomy {
     @Override
     public EconomyResponse withdrawPlayer(String s, double v) {
         try {
+            // Towny support
+            if (s.startsWith("town-") || s.startsWith("nation-")) {
+                var newBalance = 0d;
+                if (_valourLink.LocalEcoAccounts.containsKey(s)) {
+                    var current = _valourLink.LocalEcoAccounts.get(s);
+                    if (current < v) {
+                        return new EconomyResponse(0, 0, EconomyResponse.ResponseType.FAILURE, "Balance too low");
+                    }
+
+                    newBalance = current - v;
+                    _valourLink.LocalEcoAccounts.put(s, newBalance);
+                } else {
+                    newBalance = v;
+                    _valourLink.LocalEcoAccounts.put(s, newBalance);
+                }
+
+                _valourLink.SaveLocalAccounts();
+
+                return new EconomyResponse(v, newBalance, EconomyResponse.ResponseType.SUCCESS, null);
+            }
+
             var player = Bukkit.getOfflinePlayer(s);
             var acc = ValourEconomy.Instance.GetAccountByUserId(player.getUniqueId().toString()).get();
-            return DoWithraw(acc, v);
+            return DoWithdraw(acc, v);
         } catch (Exception ex) {
             _valourLink.LogToConsole("Unexpected error in Valour Vault Hook!");
             _valourLink.LogToConsole(ex.getMessage());
@@ -264,7 +309,7 @@ public class ValourVaultHook extends AbstractEconomy {
     public EconomyResponse withdrawPlayer(OfflinePlayer offlinePlayer, double v) {
         try {
             var acc = ValourEconomy.Instance.GetAccountByUserId(offlinePlayer.getUniqueId().toString()).get();
-            return DoWithraw(acc, v);
+            return DoWithdraw(acc, v);
         } catch (Exception ex) {
             _valourLink.LogToConsole("Unexpected error in Valour Vault Hook!");
             _valourLink.LogToConsole(ex.getMessage());
@@ -275,9 +320,30 @@ public class ValourVaultHook extends AbstractEconomy {
     @Override
     public EconomyResponse withdrawPlayer(String s, String s1, double v) {
         try {
+            // Towny support
+            if (s.startsWith("town-") || s.startsWith("nation-")) {
+                var newBalance = 0d;
+                if (_valourLink.LocalEcoAccounts.containsKey(s)) {
+                    var current = _valourLink.LocalEcoAccounts.get(s);
+                    if (current < v) {
+                        return new EconomyResponse(0, 0, EconomyResponse.ResponseType.FAILURE, "Balance too low");
+                    }
+
+                    newBalance = current - v;
+                    _valourLink.LocalEcoAccounts.put(s, newBalance);
+                } else {
+                    newBalance = v;
+                    _valourLink.LocalEcoAccounts.put(s, newBalance);
+                }
+
+                _valourLink.SaveLocalAccounts();
+
+                return new EconomyResponse(v, newBalance, EconomyResponse.ResponseType.SUCCESS, null);
+            }
+
             var player = Bukkit.getOfflinePlayer(s);
             var acc = ValourEconomy.Instance.GetAccountByUserId(player.getUniqueId().toString()).get();
-            return DoWithraw(acc, v);
+            return DoWithdraw(acc, v);
         } catch (Exception ex) {
             _valourLink.LogToConsole("Unexpected error in Valour Vault Hook!");
             _valourLink.LogToConsole(ex.getMessage());
@@ -289,7 +355,7 @@ public class ValourVaultHook extends AbstractEconomy {
     public EconomyResponse withdrawPlayer(OfflinePlayer offlinePlayer, String s, double v) {
         try {
             var acc = ValourEconomy.Instance.GetAccountByUserId(offlinePlayer.getUniqueId().toString()).get();
-            return DoWithraw(acc, v);
+            return DoWithdraw(acc, v);
         } catch (Exception ex) {
             _valourLink.LogToConsole("Unexpected error in Valour Vault Hook!");
             _valourLink.LogToConsole(ex.getMessage());
@@ -305,9 +371,10 @@ public class ValourVaultHook extends AbstractEconomy {
 
             var result = ValourEconomy.Instance.DoTransaction(_economy.HoldingsAccount, acc, v).get();
             if (!result.Success) {
+                _valourLink.LogToConsole("Failed Deposit: " + result.Message);
                 return new EconomyResponse(0, acc.balanceValue.doubleValue(), EconomyResponse.ResponseType.FAILURE, result.Message);
             } else {
-                return new EconomyResponse(v, acc.balanceValue.doubleValue() + v, EconomyResponse.ResponseType.SUCCESS, result.Message);
+                return new EconomyResponse(v, acc.balanceValue.doubleValue() + v, EconomyResponse.ResponseType.SUCCESS, null);
             }
 
         } catch (Exception ex) {
@@ -320,6 +387,24 @@ public class ValourVaultHook extends AbstractEconomy {
     @Override
     public EconomyResponse depositPlayer(String s, double v) {
         try {
+
+            // Towny support
+            if (s.startsWith("town-") || s.startsWith("nation-")) {
+                var newBalance = 0d;
+                if (_valourLink.LocalEcoAccounts.containsKey(s)) {
+                    var current = _valourLink.LocalEcoAccounts.get(s);
+                    newBalance = current + v;
+                    _valourLink.LocalEcoAccounts.put(s, newBalance);
+                } else {
+                    newBalance = v;
+                    _valourLink.LocalEcoAccounts.put(s, newBalance);
+                }
+
+                _valourLink.SaveLocalAccounts();
+
+                return new EconomyResponse(v, newBalance, EconomyResponse.ResponseType.SUCCESS, null);
+            }
+
             var player = Bukkit.getOfflinePlayer(s);
             var acc = ValourEconomy.Instance.GetAccountByUserId(player.getUniqueId().toString()).get();
             return DoDeposit(acc, v);
@@ -345,6 +430,23 @@ public class ValourVaultHook extends AbstractEconomy {
     @Override
     public EconomyResponse depositPlayer(String s, String s1, double v) {
         try {
+            // Towny support
+            if (s.startsWith("town-") || s.startsWith("nation-")) {
+                var newBalance = 0d;
+                if (_valourLink.LocalEcoAccounts.containsKey(s)) {
+                    var current = _valourLink.LocalEcoAccounts.get(s);
+                    newBalance = current + v;
+                    _valourLink.LocalEcoAccounts.put(s, newBalance);
+                } else {
+                    newBalance = v;
+                    _valourLink.LocalEcoAccounts.put(s, newBalance);
+                }
+
+                _valourLink.SaveLocalAccounts();
+
+                return new EconomyResponse(v, newBalance, EconomyResponse.ResponseType.SUCCESS, null);
+            }
+
             var player = Bukkit.getOfflinePlayer(s);
             var acc = ValourEconomy.Instance.GetAccountByUserId(player.getUniqueId().toString()).get();
             return DoDeposit(acc, v);
